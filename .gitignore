@@ -205,3 +205,16 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+# --- SECRETS ---
+.env
+
+# --- ENVIRONMENTS ---
+venv/
+env/
+
+# --- PYTHON BUZZ ---
+__pycache__/
+*.pyc
+
+# --- JUPYTER ---
+.ipynb_checkpoints
