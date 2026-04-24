@@ -2,80 +2,99 @@ import os
 import json
 from playwright.sync_api import sync_playwright
 from dotenv import load_dotenv
-import openai
-import time
 
-# Load environment variables (API Keys)
+# Load environment variables (kept for when you add AI credits later)
 load_dotenv()
-client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # --- SELECTOR REGISTRY ---
-# Centralized location to manage website changes
-SELECTORS = {
+# This makes your scraper "Universal". Adding a new site is now just adding a row here.
+SITE_CONFIG = {
     "amazon": {
-        # IDs (#) are the most stable things on Amazon
-        "title": "#productTitle, h1#title",
-        "price": ".a-price-whole, #priceblock_ourprice, #priceblock_dealprice",
-        "reviews": ".review-text-content, [data-hook='review-body']"
+        "title": ["#productTitle", "h1#title", ".a-size-large"],
+        "price": [".a-price-whole", "#priceblock_ourprice", ".a-offscreen"],
+        "reviews": [".review-text-content", "[data-hook='review-body']"]
     },
     "flipkart": {
-        # Uses 'Contains' logic: finds any class that looks like a price/title
-        "title": "h1, .VU-Z7M, .B_NuCI",
-        "price": "[class*='Nx9bqj'], ._30jeq3, [class*='price']",
-        "reviews": ".Z_37Z8, .t-ZTKy, [class*='comment']"
+        "title": ["h1", ".VU-Z7M", ".B_NuCI"],
+        "price": ["[class*='Nx9bqj']", "._30jeq3", ".div.Nx9bqj"],
+        "reviews": [".Z_37Z8", ".t-ZTKy"]
     }
 }
 
+GENERIC_SELECTORS = {
+    "title": ["h1", "meta[property='og:title']"],
+    "price": ["[class*='price']", ".price", "#price"],
+    "reviews": ["div[class*='review']", ".comments"]
+}
+
+def get_selectors(url):
+    """Detects which site we are on and returns the right 'map'."""
+    for domain, selectors in SITE_CONFIG.items():
+        if domain in url.lower():
+            return selectors
+    return GENERIC_SELECTORS
+
 def scrape_and_analyze(url: str):
     """
-    Partner A Logic: 
-    1. Detect Site 
-    2. Scrape Data 
-    3. Analyze with AI (JSON Output)
+    Universal Scraper Engine
+    1. Detects site
+    2. Loops through possible selectors (Fallback logic)
+    3. Returns structured data (Mocked AI for Demo)
     """
-    # Detect the site
-    site = "amazon" if "amazon" in url else "flipkart" if "flipkart" in url else None
-    
-    if not site:
-        return {"error": "Unsupported website. Please use Amazon or Flipkart."}
+    selectors = get_selectors(url)
+    site_name = "amazon" if "amazon" in url else "flipkart" if "flipkart" in url else "Unknown"
 
-   # ... (Keep the site detection logic at the top)
-
-    # Initialize variables so they exist outside the 'with' block
-    title, price, reviews = "", "", []
+    # Initialize data holders
+    title_text, price_text = "Not Found", "Not Found"
 
     with sync_playwright() as p:
+        # Launch headed so you can see it bypass the bot checks
         browser = p.chromium.launch(headless=False)
-        context = browser.new_context(user_agent="...")
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        )
         page = context.new_page()
 
         try:
-            # Change "networkidle" to "domcontentloaded"
-            page.goto(url, wait_until="domcontentloaded")
-            page.wait_for_selector(SELECTORS[site]["price"], timeout=20000)
+            # Using 'domcontentloaded' as it's faster and more stable for retail sites
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
             
-            # Store data in our local variables
-            title = page.locator(SELECTORS[site]["title"]).first.inner_text().strip()
-            price = page.locator(SELECTORS[site]["price"]).first.inner_text().strip()
-            reviews = page.locator(SELECTORS[site]["reviews"]).all_text_contents()[:5]
-            
-            # The 'with' block will close the browser automatically when we exit it
+            # 1. TRY TO FIND TITLE
+            for selector in selectors["title"]:
+                element = page.locator(selector).first
+                try:
+                    # Wait briefly for each option to appear
+                    element.wait_for(state="visible", timeout=3000)
+                    title_text = element.inner_text().strip()
+                    if title_text: break 
+                except:
+                    continue
+
+            # 2. TRY TO FIND PRICE
+            for selector in selectors["price"]:
+                element = page.locator(selector).first
+                try:
+                    element.wait_for(state="visible", timeout=3000)
+                    price_text = element.inner_text().strip()
+                    if price_text: break
+                except:
+                    continue
+
         except Exception as e:
-            return {"error": f"Scraping failed: {str(e)}"}
+            print(f"Scraping Error: {e}")
+        finally:
+            browser.close()
 
-    # --- OUTSIDE the 'with' block now (The Event Loop is gone) ---
-    
+    # 3. AI ANALYZER PHASE (Mocked due to 429 Quota Error)
+    # This keeps your project running even without API credits
     analysis_data = {
-        "sentiment_score": 8,
-        "top_3_pros": ["Great Camera", "Fast Performance", "Premium Feel"],
-        "top_3_cons": ["Expensive", "Slow Charging", "No Charger in Box"],
-        "verdict": "A solid flagship choice for power users (Demo Mode)."
+        "product_name": title_text,
+        "price": price_text,
+        "platform": site_name.capitalize(),
+        "sentiment_score": 8.5,
+        "top_3_pros": ["High-quality build", "Excellent performance", "Great value"],
+        "top_3_cons": ["Limited stock", "Premium pricing", "Slow shipping"],
+        "verdict": "A top-tier choice for tech enthusiasts (Demo Mode)."
     }
-
-    analysis_data.update({
-        "product_name": title,
-        "price": price,
-        "platform": site.capitalize()
-    })
 
     return analysis_data

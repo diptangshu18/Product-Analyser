@@ -2,7 +2,7 @@ from scraper.engine import scrape_and_analyze
 import json
 
 # STEP 1: Paste the Flipkart URL here
-TEST_URL = "https://www.amazon.in/dp/B0CHX1W1XY"
+TEST_URL = "https://www.samsung.com/in/air-conditioners/split-ac/"
 
 def start_test():
     print(f"🚀 Starting AI Analysis for: {TEST_URL}")
