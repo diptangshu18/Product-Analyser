@@ -1,0 +1,1 @@
+"We use GitHub Actions to run automated CI checks on every push, ensuring the scraper and AI modules remain functional as the project grows.".e
